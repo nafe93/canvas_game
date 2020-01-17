@@ -1,0 +1,429 @@
+<html>
+<head>
+  <title>Игра Линии</title>
+  <style>
+
+    body { background-color: #666; }
+    td { 
+      background-color: #ddd; 
+      //border: 2px inset #ddd;
+      border: 2px solid #ddd;
+    }
+    #gameboard {
+      background-color: #fff; 
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      padding: 10px;
+      margin-left: -180px; 
+      margin-top: -210px;
+      width: 360;
+    }
+    #toolbar {
+      font-family: sans-serif;
+      font-height: 120%;
+      font-weight: bold;
+      width: 100%;
+      height: 40px;
+      padding: 0;
+      margin: 0;
+    }
+    #buttons { 
+      padding-top: 3px;
+      margin: 0;
+    }
+    #next { 
+      position: absolute; top: 6px; left: 130px; 
+      padding: 0;
+      margin: 0;
+    }
+    #scorepanel {
+      position: absolute; top: 14px; right: 8px; 
+      padding: 0;
+      margin: 0;
+    }
+    #score {
+      text-align: right;
+    }
+
+  </style>
+
+
+  <script>
+  
+    totalScore   = 0;
+    boardSize    = 9;
+    ballColours  = 7;
+    gameCell     = new Array(boardSize * boardSize);
+    nextBall     = new Array(3);
+    throbStates  = new Array(0, 1, 2, 1);
+    dirX         = new Array(-1,  0, -1, -1);
+    dirY         = new Array( 0, -1, -1,  1);
+    scoreTable   = new Array(10, 12, 18, 28, 42, 82, 108, 138, 172, 210);
+    gameOver     = false;
+    selectedCell = -1;
+    throbState   = 0;
+    throbDelay   = 100;
+    nextPath     = null;
+    nextStep     = 0;
+    stepDelay    = 20;
+    hiScoreName  = new Array(10);
+    hiScoreScore = new Array(10);
+    hiScoreNick  = "";
+
+    function initialiseGame() {
+      var i,j;
+      var matrixDiv = document.getElementById('matrix');
+
+      var tbl = '<table border="0" cellpadding="1" cellspacing="2">';
+      for(i = 0; i < boardSize; i++) {
+        tbl += '<tr>';
+        for(j = 0; j < boardSize; j++) {
+          cellId = i * boardSize + j;
+          tbl += '<td><img id="cell' + cellId +
+                 '" onMouseDown="clickCell(' + cellId +
+                 ')" src="images/space.gif" width="32" height="32"></td>';
+        }
+        tbl += '</tr>';
+      }
+      tbl += '</table>';
+      matrixDiv.innerHTML = tbl;
+
+      newGame();
+      loadHighScores();
+    }
+
+    function newGame() {
+      var i, j;
+      setScore(0);
+      gameOver = false;
+      selectCell(-1);
+      for(i = boardSize * boardSize - 1; i >= 0; i--) {
+        setCell(i, 0);
+      }
+      i = 5;
+      while(i > 0) {
+	j = Math.floor(Math.random() * boardSize * boardSize);
+	if(gameCell[j] == 0) {
+	  setCell(j, Math.floor(Math.random() * ballColours) + 1);
+	  i--;
+	}
+      }
+      //initialiseTest();
+      selectNextBalls();
+    }
+
+    function initialiseTest() {
+      var testPattern = new Array(
+        0, 0, 1, 1, 1, 1, 1, 1, 1,
+        0, 0, 1, 0, 0, 0, 0, 0, 1,
+        1, 1, 0, 0, 0, 0, 0, 0, 1,
+        1, 0, 1, 0, 0, 0, 0, 0, 1,
+        1, 0, 1, 2, 0, 2, 0, 0, 1,
+        1, 0, 1, 0, 0, 0, 0, 0, 1,
+        1, 0, 0, 0, 0, 0, 0, 0, 1,
+        1, 0, 0, 0, 0, 0, 0, 0, 1,
+        1, 1, 1, 1, 1, 1, 1, 1, 1
+      );
+      for(var i = boardSize * boardSize - 1; i >= 0; i--) {
+	setCell(i, testPattern[i]);
+      }
+    }
+
+    function setScore(lineLength) {
+      if(lineLength == 0) {
+        totalScore = 0;
+      }
+      else {
+        var i = lineLength - 5;
+        if(i < scoreTable.length) {
+          totalScore += scoreTable[i]
+        }
+        else {
+          totalScore += 10 + Math.pow(2, i);
+        }
+      }
+      //document.forms[0].score.value = totalScore;
+      var obj = document.getElementById('scorepanel');
+      obj.innerHTML = 'Очки:&nbsp;&nbsp;' + totalScore;
+    }
+
+    function selectNextBalls() {
+      var i;
+      for(i = 0; i < 3; i++) {
+        nextBall[i] = Math.floor(Math.random() * ballColours);
+        var nextImage = document.getElementById('next' + i);
+        nextImage.src = 'images/ball-' + nextBall[i] + '-0.gif';
+        nextBall[i]++;
+      }
+    }
+
+    function playNextBalls() {
+      var i = 0, j, k, x;
+      var freeCell = new Array();
+      for(j = boardSize * boardSize - 1; j >= 0; j--) {
+        if(gameCell[j] == 0) {
+          freeCell[i++] = j;
+        }
+      }
+      if(i <= 3) {
+        alert("Вы проиграли");
+	
+        gameOver = true;
+        return;
+      }
+      for(j = 0; j < 3; j++) {
+        k = Math.floor(Math.random() * i);
+        x = freeCell[j];
+        freeCell[j] = freeCell[k];
+        freeCell[k] = x;
+      }
+      for(i = 0; i < 3; i++) {
+        setCell(freeCell[i], nextBall[i]);
+	removeLines(freeCell[i]);
+      }
+      selectNextBalls();
+    }
+
+    function setCell(cellNum, newContents) {
+      var srcName;
+      gameCell[cellNum] = newContents;
+      if(newContents == 0) {
+        srcName = 'space.gif';
+      }
+      else {
+        var imageNum = newContents - 1;
+        srcName = 'ball-' + imageNum + '-0.gif';
+      }
+      var cellImage = document.getElementById('cell' + cellNum);
+      cellImage.src = 'images/' + srcName;
+    }
+
+    function clickCell(cellNum) {
+      if(gameOver) {
+        alert("Game Over");
+        return false;
+      }
+      if(nextStep > 0) return false;
+      if(selectedCell == -1) {
+        if(gameCell[cellNum] != 0) {
+          selectCell(cellNum);
+        }
+        return false;
+      }
+      if(selectedCell == cellNum) {
+        selectCell(-1);
+        return false;
+      }
+      if(gameCell[cellNum] != 0) {
+	selectCell(-1);
+	setTimeout('selectCell(' + cellNum + ')', 150);
+      }
+      moveTo(cellNum);
+      return false;
+    }
+
+    function selectCell(cellNum) {
+      if(cellNum == -1) {
+        if(selectedCell != -1) {  //заменить пульсирующий изображение со статическим
+          setCell(selectedCell, gameCell[selectedCell]);
+        }
+      }
+      else {
+        throbState = 0;
+        setTimeout('throbCell()', 50)
+      }
+      selectedCell = cellNum;
+    }
+    
+    function moveTo(targetCell) {
+      if(gameCell[targetCell] != 0) {
+        return false;
+      }
+      nextPath = findPath(targetCell);
+      if(!nextPath) return false;
+      nextStep = 1;
+      selectCell(-1);
+      moveNextStep();
+      return true;
+    }
+
+    function moveNextStep() {
+      fromCell   = nextPath[nextStep - 1];
+      toCell     = nextPath[nextStep];
+      ballColour = gameCell[fromCell]
+      setCell(fromCell, 0);
+      setCell(toCell, ballColour);
+      nextStep++;
+      if(nextStep >= nextPath.length) {
+	nextStep = 0;
+	nextPath = null;
+	if(removeLines(toCell)) return;
+        playNextBalls();
+	return;
+      }
+      setTimeout('moveNextStep()', stepDelay)
+    }
+
+    function findPath(targetCell) {
+      var toTry = tryPaths(targetCell);
+      if(!toTry) return;
+      var cellPath = new Array();
+      cellPath[toTry.length - 1] = targetCell;
+      for(var i = toTry.length - 2; i >= 0; i--) {
+	cellPath[i] = findNext(cellPath[i + 1], toTry[i]);
+      }
+      return cellPath;
+    }
+
+    function findNext(nextCell, cellList) {
+      var aC = adjacentCells(nextCell);
+      for(var i = cellList.length - 1; i >= 0; i--) {
+	for(var j = aC.length - 1; j >= 0; j--) {
+	  if(cellList[i] == aC[j]) return(aC[j]);
+	}
+      }
+    }
+
+    function tryPaths(targetCell) {
+      var i, j;
+      var aTemp = new Array();
+      for(i = boardSize * boardSize - 1; i >= 0; i--) {
+	aTemp[i] = (gameCell[i] == 0 ? 0 : -1);
+      }
+      var toTry = new Array();
+      var tt = 0;
+      toTry[tt] = new Array();
+      toTry[tt][0] = selectedCell;
+      while(tt < 40) {
+	lastTries = toTry[tt];
+	tt++;
+	nextTries = new Array();
+	for(i = lastTries.length - 1; i >= 0; i--) {
+	  var aC = adjacentCells(lastTries[i]);
+	  for(j = aC.length - 1; j >= 0; j--) {
+	    if(aTemp[aC[j]] == 0) {
+	      if(aC[j] == targetCell) {
+		nextTries = new Array();
+		nextTries[0] = targetCell;
+		toTry[tt] = nextTries;
+		return toTry;
+	      }
+	      aTemp[aC[j]] = tt;
+	      nextTries[nextTries.length] = aC[j];
+	    }
+	  }
+	}
+	if(nextTries.length < 1) return;
+	toTry[tt] = nextTries;
+      }
+      return;
+    }
+
+    function adjacentCells(cellNum) {
+      var cells = new Array();
+      var x = cellNum % boardSize;
+      var y = Math.floor(cellNum / boardSize);
+      var i = 0;
+      if(x > 0) cells[i++] = cellNum - 1;
+      if(y > 0) cells[i++] = cellNum - boardSize;
+      if(x < (boardSize - 1)) cells[i++] = cellNum + 1;
+      if(y < (boardSize - 1)) cells[i++] = cellNum + boardSize;
+      return cells;
+    }
+
+    function throbCell() {
+      if(selectedCell ==-1) {
+        return;
+      }
+      var imageNum = gameCell[selectedCell] - 1;
+      throbState = (throbState + 1) % throbStates.length;
+      var cellImage = document.getElementById('cell' + selectedCell);
+      cellImage.src = 'images/ball-' + imageNum + '-' +
+                      throbStates[throbState] + '.gif';
+      setTimeout('throbCell()', throbDelay)
+    }
+
+    function removeLines(startingCell) {
+      var i, j, k;
+      var toRemove = new Array();
+      for(i = 0; i < dirX.length; i++) {
+	var lineStart = findLast(startingCell, dirX[i], dirY[i]);
+	var lineEnd = findLast(lineStart, dirX[i] * -1, dirY[i] * -1);
+	j = lineLength(lineStart, lineEnd);
+	if(j >= 5) {
+	  k = lineEnd;
+	  while(j > 0) {
+	    toRemove[toRemove.length] = k;
+	    k = k + dirX[i] + (dirY[i] * boardSize);
+	    j--;
+	  }
+	}
+      }
+      if(toRemove.length > 0) {
+	var removedCells = 0;
+	for(i = toRemove.length - 1; i >= 0; i--) {
+	  if(gameCell[toRemove[i]] > 0) {
+	    setCell(toRemove[i], 0);
+	    removedCells++;
+	  }
+	}
+        setScore(removedCells);
+	return true
+      }
+      return false
+    }
+
+    function findLast(currCell, deltaX, deltaY) {
+      var currX = currCell % boardSize;
+      var currY = Math.floor(currCell / boardSize);
+      var nextX = currX + deltaX;
+      var nextY = currY + deltaY;
+      if(nextX < 0 || nextX >= boardSize) return currCell;
+      if(nextY < 0 || nextY >= boardSize) return currCell;
+      var nextCell = nextY * boardSize + nextX;
+      if(gameCell[nextCell] != gameCell[currCell]) return currCell;
+      return findLast(nextCell, deltaX, deltaY);
+    }
+
+    function lineLength(cell1, cell2) {
+      var x1 = cell1 % boardSize;
+      var y1 = Math.floor(cell1 / boardSize);
+      var x2 = cell2 % boardSize;
+      var y2 = Math.floor(cell2 / boardSize);
+      if(x1 == x2) return y2 - y1 + 1;
+      return x2 - x1 + 1;
+    }
+
+
+
+
+  </script>
+
+</head>
+<body onLoad="initialiseGame()">
+  <div id="gameboard">
+    <div id="toolbar">
+      <form>
+        <div id="buttons">
+          <input type="button" value="Новая Игра" onClick="newGame(1)">
+        </div>
+        <div id="next">
+          <table border="0" cellpadding="1" cellspacing="2">
+            <tr>
+              <td><img id="next0" src="images/space.gif" width="32" height="32"></td>
+              <td><img id="next1" src="images/space.gif" width="32" height="32"></td>
+              <td><img id="next2" src="images/space.gif" width="32" height="32"></td>
+            </tr>
+          </table>
+        </div>
+        <div id="scorepanel" onDblClick="showHighScores()">
+	  Score:&nbsp;&nbsp;0
+        </div>
+      </form>
+    </div>
+    <div id="matrix">
+    </div>
+  </div>
+</body>
+</html>
